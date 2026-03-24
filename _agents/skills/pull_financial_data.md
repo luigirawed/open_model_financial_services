@@ -6,7 +6,7 @@ description: Extracts and standardizes open financial data relevant to UK wealth
 # `pull_financial_data` SKILL
 
 ## Description
-This skill provides the automated data extraction pipeline used for retrieving crucial macroeconomic indicators (Bank of England rates, HM Land Registry HPI, FRED data). It relies on Jupyter Notebooks to orchestrate the fetching, saving, and graceful fallback behaviors for open financial data.
+This skill provides the automated data extraction pipeline used for retrieving crucial macroeconomic indicators and retail banking data (including Bank of England base and quoted household rates, HM Land Registry HPI, ONS Inflation, Open Banking PCA, FCA MLAR, Companies House demographics, and FRED data). It relies on Jupyter Notebooks to orchestrate the fetching, saving, and graceful fallback behaviors for open financial data.
 
 ## Relevant Files
 - `notebooks/financial_data_pull.ipynb`: The orchestration script.

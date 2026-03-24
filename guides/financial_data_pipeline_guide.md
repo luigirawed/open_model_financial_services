@@ -1,6 +1,13 @@
 # Financial Data Pipeline Guide
 
-This guide explains how to use the automated UK financial data pull pipeline. The pipeline currently extracts the Bank of England Base Rate, the UK HM Land Registry House Price Index, and the US FRED 30-Year Mortgage Rate (as an external reference).
+This guide explains how to use the automated UK financial data pull pipeline. The pipeline currently extracts real-time and historical financial datasets, including:
+- Bank of England Base Rate & Quoted Household Interest Rates
+- HM Land Registry UK House Price Index
+- Office for National Statistics (ONS) UK Inflation (CPI)
+- UK Open Banking Personal Current Accounts (PCA)
+- FCA Mortgage Lending Statistics (MLAR)
+- Companies House Corporate Demographics
+- US FRED 30-Year Mortgage Rate (External Reference)
 
 ## Repository Structure
 - `notebooks/financial_data_pull.ipynb`: The main Jupyter Notebook that contains the extraction logic.
