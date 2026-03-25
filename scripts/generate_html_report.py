@@ -1,6 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from datetime import datetime
 
 # 1. Load Data
 df_boe = pd.read_csv('output/boe_base_rate.csv')
@@ -210,21 +211,9 @@ fig8_bar.add_trace(go.Bar(
 ))
 
 fig8_bar.update_layout(
-    title="Top 15 Most Deprived Districts (Toggle Data Year)",
-    xaxis_title="Deprivation Score (Higher = More Deprived)",
-    yaxis=dict(autorange="reversed"),
-    updatemenus=[dict(
-        type="buttons",
-        direction="right",
-        x=0.8, y=1.1,
-        buttons=list([
-            dict(label="2025 (Latest)", method="update", args=[{"visible": [True, False]}, {"title": "Top 15 Most Deprived Districts (IMD 2025)"}]),
-            dict(label="2019 (Baseline)", method="update", args=[{"visible": [False, True]}, {"title": "Top 15 Most Deprived Districts (IMD 2019)"}])
-        ])
-    )],
     **layout_args
 )
-html_chart8_bar = fig8_bar.to_html(full_html=False, include_plotlyjs=False)
+html_chart8_bar = fig8_bar.to_html(full_html=False, include_plotlyjs=False, div_id="chart8_bar")
 
 # Chart 8b: Toggleable Density Heatmap
 df_centroids = pd.read_csv('output/uk_lad_centroids.csv')
@@ -257,28 +246,17 @@ fig8_map.add_trace(go.Densitymapbox(
     text=df_map_2019[name_2019_col].tolist(),
     visible=False
 ))
-
 fig8_map.update_layout(
-    title="National Deprivation Density Heatmap (Toggle Snapshot)",
     mapbox=dict(
         style="carto-positron",
         center=dict(lat=55.0, lon=-3.0),
         zoom=4.5,
         bounds={"west": -12, "east": 4, "south": 48, "north": 62}
     ),
-    updatemenus=[dict(
-        type="buttons",
-        direction="right",
-        x=0.01, y=0.98,
-        buttons=list([
-            dict(label="2025 Snapshot", method="update", args=[{"visible": [True, False]}, {"title": "National Deprivation Heatmap (2025 Latest)"}]),
-            dict(label="2019 Snapshot", method="update", args=[{"visible": [False, True]}, {"title": "National Deprivation Heatmap (2019 Baseline)"}])
-        ])
-    )],
     height=850,
     **layout_args
 )
-html_chart8_map = fig8_map.to_html(full_html=False, include_plotlyjs=True)
+html_chart8_map = fig8_map.to_html(full_html=False, include_plotlyjs=True, div_id="chart8_map")
 
 # Trend Table HTML
 def shift_color(val):
@@ -544,7 +522,84 @@ fig5.update_layout(
 )
 html_chart5 = fig5.to_html(full_html=False, include_plotlyjs=False)
 
-# 4. Generate Final HTML File
+# --------------------------------------------------------------------------------------------------------------------
+# 4. PREPARE HERO SECTION & STAT HIGHLIGHTS (2019 vs 2026)
+# --------------------------------------------------------------------------------------------------------------------
+df_gilt_raw = pd.read_csv('output/boe_gilt_yields_raw.csv')
+df_gilt_raw['observation_date'] = pd.to_datetime(df_gilt_raw.iloc[:,0])
+df_gilt_raw = df_gilt_raw.sort_values('observation_date')
+
+def get_h_stat(df, d_col, v_col, yr, is_latest=False):
+    try:
+        if is_latest: return df.iloc[-1][v_col]
+        return df[df[d_col] >= f'{yr}-01-01'].iloc[0][v_col]
+    except: return 0
+
+b19 = get_h_stat(df_boe.reset_index(), 'Date', 'IUDBEDR', 2019)
+b26 = get_h_stat(df_boe.reset_index(), 'Date', 'IUDBEDR', 2026, True)
+c19 = get_h_stat(df_inf.reset_index(), 'Date', 'CPI_Rate', 2019)
+c26 = get_h_stat(df_inf.reset_index(), 'Date', 'CPI_Rate', 2026, True)
+g19 = get_h_stat(df_gilt_raw, 'observation_date', 'IRLTLT01GBM156N', 2019)
+g26 = get_h_stat(df_gilt_raw, 'observation_date', 'IRLTLT01GBM156N', 2026, True)
+h19 = 235000 # Benchmark 2019
+h26 = df['AveragePrice'].iloc[-1]
+
+hero_html = f"""
+    <div class="hero">
+        <div class="hero-inner">
+            <div class="theme-toggle-icon" onclick="toggleTheme()" title="Toggle Dark/Light Mode">◑</div>
+            <div class="header-meta">Financial Services Market Insights | {datetime.now().strftime('%B %Y')}</div>
+            <h1>Macroeconomic Insights &amp; Affordability</h1>
+        </div>
+    </div>
+
+    <div class="insights-card">
+        <h2>Crude awakening for central banks</h2>
+        <ul class="insights-list">
+            <li><strong>Bond Market Volatility:</strong> Global bonds fall as UK 10-year yields hit 15-year highs ({g26:.1f}%) for the first time since the 2008 financial crisis. <a class="source-ref" title="Bank of England - Gilt Yields" href="#s1">[1]</a></li>
+            <li><strong>Inflation Resilience:</strong> BoE and global central banks stress readiness to act as "second-round" inflation risks from the Iran-USA geopolitical tension disrupt energy supply chains. <a class="source-ref" title="Bank of England - Monetary Policy Report" href="#s1">[1]</a><a class="source-ref" title="Reuters/Bloomberg - Energy Market Analysis" href="#news">[5]</a></li>
+            <li><strong>Activity & Sentiment:</strong> Flash PMIs continue to reflect a high-interest rate environment where activity is constrained by "higher for longer" policy anchoring. <a class="source-ref" title="Reuters/Bloomberg - PMI Reports" href="#news">[5]</a></li>
+            <li><strong>Inflation Outlook:</strong> Latest CPI data suggests inflation is unlikely to return to the 2% target in Q2, with persistent services-led pressure. <a class="source-ref" title="ONS - CPI Inflation" href="#s2">[2]</a><a class="source-ref" title="Financial Times - Economic Forecast" href="#news">[6]</a></li>
+        </ul>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">BoE Base Rate <a class="source-ref" title="Bank of England" href="#s1">[1]</a></div>
+            <div class="stat-main">
+                <div class="stat-value">{b26:.2f}%</div>
+                <div class="stat-trend trend-up">+{b26-b19:.2f}%</div>
+            </div>
+            <div class="stat-baseline">vs {b19:.2f}% in 2019</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">CPI Inflation <a class="source-ref" title="ONS - CPI" href="#s2">[2]</a></div>
+            <div class="stat-main">
+                <div class="stat-value">{c26:.1f}%</div>
+                <div class="stat-trend trend-up">+{c26-c19:.1f}%</div>
+            </div>
+            <div class="stat-baseline">vs {c19:.1f}% in 2019</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">10Y Gilt Yield <a class="source-ref" title="Bank of England" href="#s1">[1]</a></div>
+            <div class="stat-main">
+                <div class="stat-value">{g26:.1f}%</div>
+                <div class="stat-trend trend-up">+{g26-g19:.1f}%</div>
+            </div>
+            <div class="stat-baseline">vs {g19:.1f}% in 2019</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Avg House Price <a class="source-ref" title="Land Registry - UK HPI" href="#s4">[4]</a></div>
+            <div class="stat-main">
+                <div class="stat-value">£{h26/1000:.0f}k</div>
+                <div class="stat-trend trend-up">+{(h26/h19 - 1):.1%}</div>
+            </div>
+            <div class="stat-baseline">vs £{h19/1000:.0f}k in 2019</div>
+        </div>
+    </div>
+"""
+
+# 5. Generate Final HTML File
 html_template = f"""<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -645,22 +700,147 @@ html_template = f"""<!DOCTYPE html>
             padding: 16px;
             border-bottom: 2px solid var(--border-color);
             z-index: 10;
+            cursor: pointer;
+            transition: background 0.2s;
         }}
+        .custom-table th:hover {{ background-color: var(--border-color); }}
+        .custom-table th::after {{ content: ' ↕'; opacity: 0.3; font-size: 0.8em; }}
+        
         .custom-table td {{
             padding: 12px 16px;
             border-bottom: 1px solid var(--border-color);
             color: var(--text-color);
         }}
         .custom-table tr:hover {{ background-color: rgba(59, 130, 246, 0.05); }}
-        .sources {{
-            margin-top: 80px;
-            padding-top: 40px;
-            border-top: 1px solid var(--border-color);
-            font-size: 0.9rem;
+        
+        /* Term & Source Hovers */
+        .term-hover {{
+            border-bottom: 1px dotted var(--accent-color);
+            cursor: help;
+            color: var(--accent-color);
+            font-weight: 500;
         }}
-        .sources a {{ color: var(--accent-color); text-decoration: none; }}
-        .sources a:hover {{ text-decoration: underline; }}
-        .sources li {{ margin-bottom: 8px; }}
+        .source-ref {{
+            font-size: 0.8em;
+            vertical-align: super;
+            color: var(--accent-color);
+            cursor: pointer;
+            text-decoration: none;
+            margin-left: 2px;
+            font-weight: 600;
+        }}
+        .source-ref:hover {{ text-decoration: underline; }}
+
+        /* Accordions */
+        details {{
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            overflow: hidden;
+        }}
+        summary {{
+            padding: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--table-header);
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        summary::after {{ content: '▼'; font-size: 0.8em; transition: transform 0.2s; }}
+        details[open] summary::after {{ transform: rotate(180deg); }}
+        .details-content {{ padding: 20px; border-top: 1px solid var(--border-color); }}
+
+        /* Hero Section */
+        .hero {{
+            background: #674fb0;
+            color: white;
+            padding: 60px 0 100px 0;
+            text-align: left;
+            position: relative;
+            margin-bottom: -60px;
+        }}
+        .hero-inner {{ max-width: 1200px; margin: 0 auto; padding: 0 40px; position: relative; }}
+        .header-meta {{ font-size: 1.1rem; opacity: 0.9; margin-bottom: 8px; font-weight: 500; }}
+        .hero h1 {{ font-size: 3.5rem; margin: 0; font-weight: 800; letter-spacing: -0.02em; max-width: 800px; }}
+
+        .theme-toggle-icon {{
+            position: absolute;
+            top: 0;
+            right: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }}
+        .theme-toggle-icon:hover {{ background: rgba(255, 255, 255, 0.2); transform: scale(1.05); }}
+
+        /* Insights Card */
+        .insights-card {{
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            margin: 0 auto 40px auto;
+            max-width: 1120px;
+            position: relative;
+            z-index: 5;
+            border: 1px solid var(--border-color);
+        }}
+        .insights-card h2 {{ color: var(--text-color); margin-top: 0; font-size: 1.8rem; border:none; padding:0; }}
+        .insights-list {{ list-style: none; padding: 0; margin-top: 24px; }}
+        .insights-list li {{
+            margin-bottom: 16px;
+            padding-left: 28px;
+            position: relative;
+            line-height: 1.6;
+            color: var(--text-color);
+            font-size: 1.05rem;
+        }}
+        .insights-list li::before {{
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #674fb0;
+            font-size: 1.5rem;
+            line-height: 1;
+        }}
+
+        /* Key Facts Grid */
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            max-width: 1120px;
+            margin: 0 auto 60px auto;
+        }}
+        .stat-card {{
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s;
+        }}
+        .stat-card:hover {{ transform: translateY(-4px); }}
+        .stat-label {{ font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 12px; font-weight: 600; }}
+        .stat-main {{ display: flex; align-items: baseline; gap: 8px; }}
+        .stat-value {{ font-size: 2rem; font-weight: 700; color: var(--text-color); }}
+        .stat-trend {{ font-size: 0.95rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; }}
+        .trend-up {{ background: rgba(239, 68, 68, 0.1); color: #ef4444; }}
+        .stat-baseline {{ font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }}
+
         .notification-box {{
             padding: 16px;
             background-color: rgba(59, 130, 246, 0.1);
@@ -670,19 +850,77 @@ html_template = f"""<!DOCTYPE html>
             font-size: 0.95rem;
             color: var(--text-color);
         }}
+
+        /* Sidebar Navigation Layout */
+        .chart-layout-with-sidebar {{
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }}
+        .chart-main-content {{
+            flex: 1;
+            min-width: 0;
+        }}
+        .sidebar-nav {{
+            width: 140px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            position: sticky;
+            top: 20px;
+        }}
+        .nav-label {{
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }}
+        .sidebar-link {{
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }}
+        .sidebar-link:hover {{
+            background: rgba(59, 130, 246, 0.05);
+            color: var(--accent-color);
+        }}
+        .sidebar-link.active {{
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-color);
+            border-color: rgba(59, 130, 246, 0.3);
+            font-weight: 700;
+        }}
     </style>
 </head>
 <body>
+    <div class="hero-wrapper">
+        {hero_html}
+    </div>
+
     <div class="container">
-        <header>
+        <header style="display:none;">
             <h1>UK Macroeconomic Context (2019-2026)</h1>
-            <button class="theme-toggle" onclick="toggleTheme()">Toggle Dark Mode</button>
         </header>
+
+        <div style="height: 20px;"></div>
 
         <div class="section">
             <div class="text-box">
                 <h2>1. The First Shock: Inflation &amp; Monetary Tightening</h2>
-                <p>The post-pandemic reopening coupled with the outbreak of the war in Ukraine triggered an immediate energy crisis across Europe. International wholesale gas prices violently surged, forcing UK CPI to a 41-year peak of 11.1% by late 2022. To combat this imported cost-of-living crisis, the Bank of England engaged in a massive hiking sprint, dragging the Base Rate from 0.1% to a 15-year high of 5.25%.</p>
+                <p>The post-pandemic reopening coupled with the outbreak of the war in Ukraine triggered an immediate energy crisis across Europe. International wholesale gas prices violently surged, forcing UK <span class="term-hover" title="Consumer Price Index: The headline measure of inflation in the UK.">CPI</span> to a 41-year peak of 11.1% by late 2022. To combat this imported cost-of-living crisis, the Bank of England engaged in a massive hiking sprint, dragging the <span class="term-hover" title="Bank of England Base Rate: The key interest rate set by the BoE.">Base Rate</span> from 0.1% to a 15-year high of 5.25%.</p>
             </div>
             <div class="chart-container">
                 {html_chart1}
@@ -692,7 +930,7 @@ html_template = f"""<!DOCTYPE html>
         <div class="section">
             <div class="text-box">
                 <h2>2. Mortgage Chaos &amp; The Housing Cooldown</h2>
-                <p>While the Base Rate marched upwards to fight inflation, mortgage rates spiked violently in Autumn 2022. The catalyst was the September "Mini-Budget" which terrified bond markets and caused lenders to pull thousands of products, resetting 2-year fixed mortgages from ~4% to over 6% instantly. This credit tightening ultimately suppressed the runaway House Price growth originally sparked by the 2020 Stamp Duty Holiday.</p>
+                <p>While the <span class="term-hover" title="Base Rate: Determines the cost of borrowing and reward for saving.">Base Rate</span> marched upwards to fight inflation, mortgage rates spiked violently in Autumn 2022. The catalyst was the September "Mini-Budget" which terrified bond markets and caused lenders to pull thousands of products, resetting 2-year fixed mortgages from ~4% to over 6% instantly. This credit tightening ultimately suppressed the runaway House Price growth originally sparked by the 2020 Stamp Duty Holiday.</p>
             </div>
             <div class="table-wrapper">
                 {table_html}
@@ -728,7 +966,7 @@ html_template = f"""<!DOCTYPE html>
         <div class="section">
             <div class="text-box">
                 <h2>6. Regional Earnings vs House Prices: The Affordability Frontier</h2>
-                <p>By comparing average house prices against median annual earnings, we can calculate the <strong>Affordability Ratio</strong> (the number of full-salary years needed to buy a home). While the national average has drifted, the regional disparity is stark. In London, the ratio often exceeds 12-14x, whereas in the North East, it remains closer to 5-6x. This "Affordability Frontier" determines regional mobility; as the ratio climbs in the South, we see increased "priced-out" migration toward more affordable northern hubs, which in turn begins to inflate those local markets.</p>
+                <p>By comparing average house prices against median annual earnings, we can calculate the <span class="term-hover" title="Affordability Ratio: House Price divided by Annual Earnings (higher = less affordable).">Affordability Ratio</span> (the number of full-salary years needed to buy a home). While the national average has drifted, the regional disparity is stark. In London, the ratio often exceeds 12-14x, whereas in the North East, it remains closer to 5-6x. This "Affordability Frontier" determines regional mobility; as the ratio climbs in the South, we see increased "priced-out" migration toward more affordable northern hubs, which in turn begins to inflate those local markets.</p>
             </div>
             <div class="table-wrapper">
                 {afford_table_html}
@@ -741,7 +979,7 @@ html_template = f"""<!DOCTYPE html>
         <div class="section">
             <div class="text-box">
                 <h2>7. Disposable Income &amp; The "Real" Squeeze</h2>
-                <p>Gross Disposable Household Income (GDHI) represents the amount of money individuals have available for spending or saving after income distribution measures (e.g. taxes, social contributions). While nominal GDHI per head has grown since 2019, much of this gain has been offset by the inflationary shocks from the Ukraine and Middle East conflicts. High-energy costs and food inflation act as a "stealth tax" on disposable income, particularly in regions where earnings growth has lagged behind the national average.</p>
+                <p><span class="term-hover" title="Gross Disposable Household Income: The money available to households for spending after taxes and benefits.">Gross Disposable Household Income (GDHI)</span> represents the amount of money individuals have available for spending or saving after income distribution measures (e.g. taxes, social contributions). While nominal GDHI per head has grown since 2019, much of this gain has been offset by the inflationary shocks from the Ukraine and Middle East conflicts. High-energy costs and food inflation act as a "stealth tax" on disposable income, particularly in regions where earnings growth has lagged behind the national average.</p>
             </div>
             <div class="chart-container">
                 {html_chart7}
@@ -750,16 +988,30 @@ html_template = f"""<!DOCTYPE html>
 
         <div class="section">
             <div class="text-box">
-                <h2>8. The Deprivation Landscape &amp; Trends (2019-2025)</h2>
-                <p>The Index of Multiple Deprivation (IMD) provides a relative measure of deprivation across England. The interactive heatmap below illustrates the <strong>Proportion of LSOAs in the most deprived 10% nationally</strong> per district. You can toggle between the 2019 baseline and the newly released 2025 update using the buttons on the map.</p>
+                <h2>8. The Deprivation Landscape &amp; Trends (2019-2025) [3]</h2>
+                <p>The <span class="term-hover" title="Index of Multiple Deprivation: The official measure of relative deprivation for small areas.">Index of Multiple Deprivation (IMD)</span> provides a relative measure of deprivation across England. The interactive heatmap below illustrates the <strong>Proportion of LSOAs in the most deprived 10% nationally</strong> per district. You can toggle between the 2019 baseline and the newly released 2025 update using the buttons on the map.</p>
                 
                 <div class="notification-box">
                     <strong>Important Information:</strong> These deprivation metrics are currently concentrated on **England**. While the map displays full UK boundaries for context, deprivation data for Scotland (SIMD), Wales (WIMD), and NI (NIMD) is pending future integration.
                 </div>
             </div>
 
-            <div class="chart-container" style="margin-bottom: 24px;">
-                {html_chart8_map}
+            <div class="chart-layout-with-sidebar">
+                <div class="chart-main-content">
+                    <div class="chart-container" style="margin-bottom: 24px;">
+                        {html_chart8_map}
+                    </div>
+
+                    <div class="chart-container" style="margin-bottom: 24px;">
+                        {html_chart8_bar}
+                    </div>
+                </div>
+
+                <div class="sidebar-nav">
+                    <div class="nav-label">Select Year</div>
+                    <a class="sidebar-link active" onclick="switchYear('2025')" id="link-2025">2025 Snapshot</a>
+                    <a class="sidebar-link" onclick="switchYear('2019')" id="link-2019">2019 Baseline</a>
+                </div>
             </div>
 
             <div class="text-box">
@@ -769,34 +1021,42 @@ html_template = f"""<!DOCTYPE html>
                     {trend_table_html}
                 </div>
             </div>
+        </div>
 
-            <div class="chart-container">
-                {html_chart8_bar}
+        <details id="terms">
+            <summary>Key of Terms &amp; Definitions</summary>
+            <div class="details-content">
+                <ul>
+                    <li><strong>BoE Base Rate:</strong> The interest rate the Bank of England charges other banks. Influences mortgage and savings rates.</li>
+                    <li><strong>CPI Inflation:</strong> Consumer Price Index. Measures the average change over time in the prices paid by consumers for a market basket of goods and services.</li>
+                    <li><strong>10Y Gilt Yield:</strong> The return on 10-year UK Government bonds. A benchmark for long-term borrowing costs.</li>
+                    <li><strong>GDHI:</strong> Gross Disposable Household Income. The money available to households for spending or saving after taxes and benefits.</li>
+                    <li><strong>IMD:</strong> Index of Multiple Deprivation. The official measure of relative deprivation for small areas in England.</li>
+                </ul>
             </div>
-        </div>
+        </details>
 
+        <details id="news">
+            <summary>News &amp; Contextual Sources</summary>
+            <div class="details-content">
+                <ul>
+                    <li><strong>[5] Reuters / S&amp;P Global</strong> — PMI Indices and Global Supply Chain sentiment: <a href="https://www.reuters.com" target="_blank">Reuters.com</a></li>
+                    <li><strong>[6] Goldman Sachs / Financial Times</strong> — Energy Market Analysis and Regional Geopolitics: <a href="https://www.ft.com" target="_blank">FT.com</a></li>
+                </ul>
+            </div>
+        </details>
 
-        <div class="sources">
-            <h3>Sources &amp; Citations</h3>
-            <h4>Data Sources</h4>
-            <ul>
-                <li><strong>Bank of England</strong> &mdash; Base Rate and Quoted Household MFI Rates: <a href="https://www.bankofengland.co.uk/boeapps/database/" target="_blank">bankofengland.co.uk</a></li>
-                <li><strong>Office for National Statistics (ONS)</strong> &mdash; Regional Earnings (EARN05) and GDHI: <a href="https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/grossweeklyearningsoffulltimeemployeesbyregionearn05" target="_blank">EARN05</a>, <a href="https://www.ons.gov.uk/economy/regionalaccounts/grossdisposablehouseholdincome" target="_blank">GDHI</a></li>
-                <li><strong>Office for National Statistics (ONS)</strong> &mdash; Consumer Price Inflation Time Series: <a href="https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23" target="_blank">ons.gov.uk</a></li>
-                <li><strong>HM Land Registry</strong> &mdash; UK House Price Index: <a href="https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads-november-2024" target="_blank">gov.uk</a></li>
-                <li><strong>Ministry of Housing, Communities &amp; Local Government</strong> &mdash; English Indices of Deprivation 2019 &amp; 2025: <a href="https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025" target="_blank">IMD 2025</a></li>
-                <li><strong>FRED (Federal Reserve)</strong> &mdash; 30-Year US Fixed Rate Mortgage Average: <a href="https://fred.stlouisfed.org/series/MORTGAGE30US" target="_blank">fred.stlouisfed.org</a></li>
-            </ul>
-            <h4>Context &amp; News Sources</h4>
-            <ul>
-                <li><strong>Ukraine Energy Shock</strong> &mdash; Impact of the war on global energy bills: <a href="https://www.energy.gov" target="_blank">Energy.gov</a>, <a href="https://eciu.net" target="_blank">ECIU</a></li>
-                <li><strong>Mini-Budget Mortgage Crash (Sep 2022)</strong> &mdash; Bond market disruption hiking UK mortgages past 6%: <a href="https://www.theguardian.com/business/2022/sep/28/mortgage-lenders-pull-products-amid-market-turmoil-truss-mini-budget" target="_blank">The Guardian</a>, <a href="https://moneyweek.com/personal-finance/mortgages/605204/average-mortgage-rates" target="_blank">MoneyWeek</a></li>
-                <li><strong>Middle East Oil Disruption (2024-2026)</strong> &mdash; Strait of Hormuz supply threats holding inflation higher: <a href="https://www.goldmansachs.com/insights/articles/what-the-middle-east-conflict-could-mean-for-oil-prices" target="_blank">Goldman Sachs</a>, <a href="https://www.al-monitor.com" target="_blank">Al-Monitor</a></li>
-                <li><strong>Stamp Duty Holiday (2020-2021)</strong> &mdash; Pandemic housing boom driver: <a href="https://www.unbiased.co.uk" target="_blank">Unbiased.co.uk</a>, <a href="https://www.cbre.co.uk" target="_blank">CBRE</a></li>
-                <li><strong>Bank of England Monetary Policy</strong> &mdash; MPC decisions and forward guidance: <a href="https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2023/august-2023" target="_blank">BoE MPC August 2023</a></li>
-                <li><strong>UK Parliament</strong> &mdash; Inflation research briefings: <a href="https://commonslibrary.parliament.uk/research-briefings/cbp-9428/" target="_blank">parliament.uk</a></li>
-            </ul>
-        </div>
+        <details id="sources">
+            <summary>Data Sources &amp; Citations</summary>
+            <div class="details-content">
+                <ul>
+                    <li><strong>[1] Bank of England</strong> (s1) — <a href="https://www.bankofengland.co.uk" target="_blank">bankofengland.co.uk</a></li>
+                    <li><strong>[2] ONS</strong> (s2) — <a href="https://www.ons.gov.uk" target="_blank">ons.gov.uk</a></li>
+                    <li><strong>[3] MHCLG</strong> (s3) — <a href="https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025" target="_blank">IMD Report</a></li>
+                    <li><strong>[4] Land Registry</strong> (s4) — <a href="https://www.gov.uk/government/organisations/land-registry" target="_blank">gov.uk</a></li>
+                </ul>
+            </div>
+        </details>
     </div>
 
     <script>
@@ -806,8 +1066,8 @@ html_template = f"""<!DOCTYPE html>
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
             html.setAttribute('data-theme', newTheme);
             
-            const btn = document.querySelector('.theme-toggle');
-            btn.textContent = newTheme === 'light' ? 'Toggle Dark Mode' : 'Toggle Light Mode';
+            const mainIcon = document.querySelector('.theme-toggle-icon');
+            mainIcon.textContent = newTheme === 'light' ? '◑' : '☼';
             
             const fontColor = newTheme === 'light' ? '#333' : '#e2e8f0';
             const gridColor = newTheme === 'light' ? '#e2e8f0' : '#334155';
@@ -824,6 +1084,82 @@ html_template = f"""<!DOCTYPE html>
             charts.forEach(function(chart) {{
                 Plotly.relayout(chart, update);
             }});
+        }}
+
+        // Client-side Table Sorting
+        document.querySelectorAll('.custom-table th').forEach(headerCell => {{
+            headerCell.addEventListener('click', () => {{
+                const table = headerCell.closest('table');
+                const tbody = table.querySelector('tbody');
+                const index = Array.from(headerCell.parentNode.children).indexOf(headerCell);
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const isAscending = headerCell.classList.contains('th-sort-asc');
+                
+                rows.sort((a, b) => {{
+                    const aText = a.children[index].textContent.trim();
+                    const bText = b.children[index].textContent.trim();
+                    
+                    // Parse numbers/percents
+                    const aNum = parseFloat(aText.replace(/[&pound;%,]/g, ''));
+                    const bNum = parseFloat(bText.replace(/[&pound;%,]/g, ''));
+                    
+                    if (!isNaN(aNum) && !isNaN(bNum)) {{
+                        return isAscending ? bNum - aNum : aNum - bNum;
+                    }}
+                    
+                    // Handle Dates (YYYY-MM or YYYY)
+                    const aDate = Date.parse(aText);
+                    const bDate = Date.parse(bText);
+                    if (!isNaN(aDate) && !isNaN(bDate)) {{
+                        return isAscending ? bDate - aDate : aDate - bDate;
+                    }}
+
+                    return isAscending ? bText.localeCompare(aText) : aText.localeCompare(bText);
+                }});
+
+                tbody.append(...rows);
+                table.querySelectorAll('th').forEach(th => th.classList.remove('th-sort-asc', 'th-sort-desc'));
+                headerCell.classList.toggle('th-sort-asc', !isAscending);
+                headerCell.classList.toggle('th-sort-desc', isAscending);
+            }});
+        }});
+
+        // Trigger default sort on load
+        document.querySelectorAll('.custom-table').forEach(table => {{
+            const firstHeader = table.querySelector('th');
+            if (firstHeader) {{
+                const text = firstHeader.textContent.toLowerCase();
+                // If it's a date/year, we want Recent first (Descending in our toggle logic starts Asc but we can force it)
+                if (text.includes('month') || text.includes('year')) {{
+                    firstHeader.click(); // First click -> usually Asc
+                    if (firstHeader.classList.contains('th-sort-asc')) {{
+                        firstHeader.click(); // Second click -> Desc
+                    }}
+                }} else {{
+                    firstHeader.click(); // Default Asc
+                }}
+            }}
+        }});
+
+        // Year Switching Logic for Section 8
+        function switchYear(year) {{
+            const is2025 = year === '2025';
+            const mapDiv = document.getElementById('chart8_map');
+            const barDiv = document.getElementById('chart8_bar');
+
+            // Update Map
+            Plotly.update(mapDiv, {{visible: [is2025, !is2025]}}, {{
+                title: is2025 ? "National Deprivation Heatmap (2025 Latest)" : "National Deprivation Heatmap (2019 Baseline)"
+            }});
+
+            // Update Bar Chart
+            Plotly.update(barDiv, {{visible: [is2025, !is2025]}}, {{
+                title: is2025 ? "Top 15 Most Deprived Districts (IMD 2025)" : "Top 15 Most Deprived Districts (IMD 2019)"
+            }});
+
+            // Update Sidebar Links
+            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+            document.getElementById('link-' + year).classList.add('active');
         }}
     </script>
 </body>
