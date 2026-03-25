@@ -20,6 +20,12 @@ df_hpi = pd.read_csv('output/uk_hpi_data.csv', low_memory=False)
 df_hpi['Date'] = pd.to_datetime(df_hpi['Date'], format='%d/%m/%Y')
 df_hpi_agg = df_hpi.groupby('Date')[['AveragePrice', '12m%Change']].mean().resample('ME').last()
 
+# New Socioeconomic Data
+df_earn = pd.read_csv('output/ons_earn05_regional_earnings.csv')
+df_gdhi = pd.read_csv('output/ons_gdhi_regional.csv')
+df_imd = pd.read_csv('output/imd_2019_regional.csv')
+df_ashe = pd.read_csv('output/ons_ashe_occupation_raw.csv')
+
 # Master DF (2019+)
 df = pd.concat([
     df_boe['IUDBEDR'].rename('BaseRate'),
@@ -29,6 +35,50 @@ df = pd.concat([
     df_hpi_agg['12m%Change'].rename('HPI_growth')
 ], axis=1)
 df = df['2019-01-01':].ffill()
+
+# 1b. Process Affordability Ratios
+# Map Earnings quarters to monthly HPI dates
+target_regions = ['London', 'South East', 'North East', 'Scotland', 'Wales']
+# Map EARN05 names to HPI names if different
+earn_map = {'London': 'London', 'South East': 'South East', 'North East': 'North East', 
+            'Scotland': 'Scotland', 'Wales': 'Wales'}
+
+# Create a monthly earnings dataframe
+earn_long = df_earn.melt(id_vars='Period', var_name='Region', value_name='WeeklyPay')
+# Convert 'Jan-Mar 2024' to '2024-03-31'
+def parse_period(p):
+    try:
+        parts = str(p).split(' ')
+        if len(parts) != 2: return pd.NaT
+        q, year = parts[0], parts[1]
+        m = {'Jan-Mar': 3, 'Apr-Jun': 6, 'Jul-Sep': 9, 'Oct-Dec': 12}.get(q, 1)
+        return pd.Timestamp(year=int(year), month=m, day=1) + pd.offsets.MonthEnd(0)
+    except: return pd.NaT
+
+earn_long['Date'] = earn_long['Period'].apply(parse_period)
+earn_monthly = earn_long.dropna(subset=['Date']).pivot(index='Date', columns='Region', values='WeeklyPay').resample('ME').ffill()
+
+# Calculate Affordability Ratio = AvgPrice / (WeeklyPay * 52)
+afford_data = []
+for region in target_regions:
+    hpi_reg = df_hpi[df_hpi['RegionName'] == region].set_index('Date')['AveragePrice'].resample('ME').last()
+    earn_reg = earn_monthly[region] if region in earn_monthly.columns else pd.Series(dtype=float)
+    
+    # Combine
+    combined = pd.concat([hpi_reg, earn_reg.rename('WeeklyPay')], axis=1)
+    combined['AveragePrice'] = pd.to_numeric(combined['AveragePrice'], errors='coerce')
+    combined['WeeklyPay'] = pd.to_numeric(combined['WeeklyPay'], errors='coerce')
+    combined = combined.dropna()
+    
+    combined['Ratio'] = combined['AveragePrice'] / (combined['WeeklyPay'] * 52)
+    combined['Region'] = region
+    afford_data.append(combined)
+
+df_afford = pd.concat(afford_data)
+# Latest affordability summary
+latest_afford = df_afford.groupby('Region').last().reset_index()
+latest_afford = latest_afford.sort_values('Ratio', ascending=False)
+
 
 # 2. Build Interactive Charts (Plotly)
 layout_args = dict(
@@ -80,6 +130,216 @@ for col in target_regions:
 
 fig3.update_layout(title="Regional Housing Inequality (Cumulative % Growth From 2019)", yaxis_title="% Growth", **layout_args)
 html_chart3 = fig3.to_html(full_html=False, include_plotlyjs=False)
+
+# Chart 6: Affordability Ratio Over Time
+fig6 = go.Figure()
+for region in target_regions:
+    reg_data = df_afford[df_afford['Region'] == region].sort_index()
+    if not reg_data.empty:
+        x_dates = [d.strftime('%Y-%m-%d') for d in reg_data.index]
+        fig6.add_trace(go.Scatter(x=x_dates, y=reg_data['Ratio'].round(2).tolist(), 
+                                 name=region, line=dict(color=colors[region], width=3)))
+
+fig6.update_layout(title="Housing Affordability Ratio (House Price / Annual Earnings)", 
+                  yaxis_title="Ratio (Years of Salary)", **layout_args)
+html_chart6 = fig6.to_html(full_html=False, include_plotlyjs=False)
+
+# Chart 7: GDHI Per Head Trends
+fig7 = go.Figure()
+gdhi_colors = {'London': '#ef4444', 'South East': '#f59e0b', 'North West': '#3b82f6', 
+               'Scotland': '#10b981', 'Wales': '#8b5cf6', 'North East': '#0ea5e9'}
+# Filter GDHI for ITL1 regions
+itl1_regions = ['London', 'South East', 'North East', 'North West', 'Scotland', 'Wales']
+for region in itl1_regions:
+    reg_gdhi = df_gdhi[df_gdhi['Region'] == region].sort_values('Year')
+    if not reg_gdhi.empty:
+        fig7.add_trace(go.Scatter(x=reg_gdhi['Year'].tolist(), y=reg_gdhi['GDHI_PerHead'].tolist(), 
+                                 name=region, line=dict(color=gdhi_colors.get(region, '#94a3b8'), width=3)))
+
+fig7.update_layout(title="Gross Disposable Household Income (GDHI) Per Head", 
+                  yaxis_title="£ Per Head", **layout_args)
+html_chart7 = fig7.to_html(full_html=False, include_plotlyjs=False)
+
+# Chart 8: IMD Deprivation Heatmap & Bar (Trend Support)
+# Load IMD 2019 and 2025
+df_imd_2019 = pd.read_csv('output/imd_2019_regional.csv')
+df_imd_2025 = pd.read_csv('output/imd_2025_regional.csv')
+
+# Pre-process columns
+df_imd_2019.columns = [c.strip() for c in df_imd_2019.columns]
+df_imd_2025.columns = [c.strip() for c in df_imd_2025.columns]
+
+prop_2019_col = [c for c in df_imd_2019.columns if 'Proportion of LSOAs in most deprived 10%' in c][0]
+prop_2025_col = [c for c in df_imd_2025.columns if 'Proportion of LSOAs in most deprived 10%' in c][0]
+score_2019_col = [c for c in df_imd_2019.columns if 'Average score' in c][0]
+score_2025_col = [c for c in df_imd_2025.columns if 'Average score' in c][0]
+name_2019_col = [c for c in df_imd_2019.columns if 'name' in c.lower()][0]
+name_2025_col = [c for c in df_imd_2025.columns if 'name' in c.lower()][0]
+code_2025_col = 'Local Authority District code (2024)' # Based on inspected header
+
+# Merge for Trends Table (on Name to handle code changes)
+df_trends = pd.merge(
+    df_imd_2019[[name_2019_col, prop_2019_col, score_2019_col]],
+    df_imd_2025[[name_2025_col, prop_2025_col, score_2025_col]],
+    left_on=name_2019_col, right_on=name_2025_col,
+    how='outer', suffixes=('_2019', '_2025')
+)
+df_trends['Shift'] = df_trends[f'{prop_2025_col}_2025'] - df_trends[f'{prop_2019_col}_2019']
+df_trends = df_trends.sort_values('Shift', ascending=False)
+
+# Bar Chart 8: Toggleable Top 15
+top15_2025 = df_imd_2025.nlargest(15, score_2025_col)
+top15_2019 = df_imd_2019.nlargest(15, score_2019_col)
+
+fig8_bar = go.Figure()
+fig8_bar.add_trace(go.Bar(
+    name="2025 (Latest)",
+    x=top15_2025[score_2025_col].tolist(),
+    y=top15_2025[name_2025_col].tolist(),
+    orientation='h',
+    marker=dict(color=top15_2025[score_2025_col].tolist(), colorscale='Reds'),
+    visible=True
+))
+fig8_bar.add_trace(go.Bar(
+    name="2019 (Baseline)",
+    x=top15_2019[score_2019_col].tolist(),
+    y=top15_2019[name_2019_col].tolist(),
+    orientation='h',
+    marker=dict(color=top15_2019[score_2019_col].tolist(), colorscale='Greys'),
+    visible=False
+))
+
+fig8_bar.update_layout(
+    title="Top 15 Most Deprived Districts (Toggle Data Year)",
+    xaxis_title="Deprivation Score (Higher = More Deprived)",
+    yaxis=dict(autorange="reversed"),
+    updatemenus=[dict(
+        type="buttons",
+        direction="right",
+        x=0.8, y=1.1,
+        buttons=list([
+            dict(label="2025 (Latest)", method="update", args=[{"visible": [True, False]}, {"title": "Top 15 Most Deprived Districts (IMD 2025)"}]),
+            dict(label="2019 (Baseline)", method="update", args=[{"visible": [False, True]}, {"title": "Top 15 Most Deprived Districts (IMD 2019)"}])
+        ])
+    )],
+    **layout_args
+)
+html_chart8_bar = fig8_bar.to_html(full_html=False, include_plotlyjs=False)
+
+# Chart 8b: Toggleable Density Heatmap
+df_centroids = pd.read_csv('output/uk_lad_centroids.csv')
+code_2019_col = [c for c in df_imd_2019.columns if 'code' in c.lower()][0]
+df_map_2025 = pd.merge(df_imd_2025, df_centroids, left_on=code_2025_col, right_on='code', how='inner')
+df_map_2019 = pd.merge(df_imd_2019, df_centroids, left_on=code_2019_col, right_on='code', how='inner')
+
+fig8_map = go.Figure()
+# 2025 Trace
+fig8_map.add_trace(go.Densitymapbox(
+    name="2025 Data",
+    lat=df_map_2025['lat'].tolist(),
+    lon=df_map_2025['lon'].tolist(),
+    z=df_map_2025[prop_2025_col].tolist(),
+    radius=40, opacity=0.9, colorscale='RdYlGn', reversescale=True, zmin=0, zmax=0.5,
+    colorbar_title="Deprivation % (2025)",
+    hovertemplate="<b>%{text} (2025)</b><br>Concentration: %{z:.1%}<extra></extra>",
+    text=df_map_2025[name_2025_col].tolist(),
+    visible=True
+))
+# 2019 Trace
+fig8_map.add_trace(go.Densitymapbox(
+    name="2019 Data",
+    lat=df_map_2019['lat'].tolist(),
+    lon=df_map_2019['lon'].tolist(),
+    z=df_map_2019[prop_2019_col].tolist(),
+    radius=40, opacity=0.9, colorscale='RdYlGn', reversescale=True, zmin=0, zmax=0.5,
+    colorbar_title="Deprivation % (2019)",
+    hovertemplate="<b>%{text} (2019)</b><br>Concentration: %{z:.1%}<extra></extra>",
+    text=df_map_2019[name_2019_col].tolist(),
+    visible=False
+))
+
+fig8_map.update_layout(
+    title="National Deprivation Density Heatmap (Toggle Snapshot)",
+    mapbox=dict(
+        style="carto-positron",
+        center=dict(lat=55.0, lon=-3.0),
+        zoom=4.5,
+        bounds={"west": -12, "east": 4, "south": 48, "north": 62}
+    ),
+    updatemenus=[dict(
+        type="buttons",
+        direction="right",
+        x=0.01, y=0.98,
+        buttons=list([
+            dict(label="2025 Snapshot", method="update", args=[{"visible": [True, False]}, {"title": "National Deprivation Heatmap (2025 Latest)"}]),
+            dict(label="2019 Snapshot", method="update", args=[{"visible": [False, True]}, {"title": "National Deprivation Heatmap (2019 Baseline)"}])
+        ])
+    )],
+    height=850,
+    **layout_args
+)
+html_chart8_map = fig8_map.to_html(full_html=False, include_plotlyjs=True)
+
+# Trend Table HTML
+def shift_color(val):
+    if pd.isna(val): return "inherit"
+    if val > 0.02: return "rgba(239, 68, 68, 0.1)" # Worsening
+    if val < -0.02: return "rgba(16, 185, 129, 0.1)" # Improving
+    return "inherit"
+
+trend_rows = []
+for _, row in df_trends.head(100).iterrows(): # Top 100 shifts
+    l_name = row[name_2025_col] if pd.notna(row[name_2025_col]) else row[name_2019_col]
+    val19 = row[f'{prop_2019_col}_2019']
+    val25 = row[f'{prop_2025_col}_2025']
+    shift = row['Shift']
+    
+    val19_str = f"{val19:.1%}" if pd.notna(val19) else 'N/A'
+    val25_str = f"{val25:.1%}" if pd.notna(val25) else 'N/A'
+    shift_str = f"{shift:+.1%}" if pd.notna(shift) else 'N/A'
+    
+    color = shift_color(shift)
+    trend_rows.append(f"""<tr style='background-color:{color};'>
+        <td>{l_name}</td>
+        <td>{val19_str}</td>
+        <td>{val25_str}</td>
+        <td style='font-weight:600; color:{"#ef4444" if shift > 0 else "#10b981"};'>
+            {shift_str}
+        </td>
+    </tr>""")
+
+trend_table_html = f"""<table class='custom-table'>
+<thead><tr><th>Location</th><th>2019 %</th><th>2025 %</th><th>Shift</th></tr></thead>
+<tbody>{"".join(trend_rows)}</tbody>
+</table>"""
+
+# 3. Helper for table heatmaps
+def heatmap_color(val, min_v, max_v):
+    if pd.isna(val) or max_v == min_v: return "inherit"
+    ratio = (val - min_v) / (max_v - min_v)
+    # Pastel green (144, 238, 144) to pastel red (255, 160, 160)
+    r = int(144 + (255 - 144) * ratio)
+    g = int(238 + (160 - 238) * ratio)
+    b = int(144 + (160 - 144) * ratio)
+    return f"rgb({r},{g},{b})"
+
+# Affordability Table
+afford_pivot = df_afford.pivot_table(index=df_afford.index, columns='Region', values='Ratio').resample('YE').last().sort_index(ascending=False)
+afford_pivot.index = afford_pivot.index.year
+
+afford_table_html = "<table class='custom-table'><thead><tr><th>Year</th>"
+for r in target_regions: afford_table_html += f"<th>{r}</th>"
+afford_table_html += "</tr></thead><tbody>"
+
+for year, row in afford_pivot.iterrows():
+    afford_table_html += f"<tr><td>{year}</td>"
+    for r in target_regions:
+        val = row[r]
+        color = heatmap_color(val, afford_pivot.min().min(), afford_pivot.max().max())
+        afford_table_html += f"<td style='background-color:{color}; font-weight:500;'>{val:.2f}</td>"
+    afford_table_html += "</tr>"
+afford_table_html += "</tbody></table>"
+
 
 # Chart 4: Absolute Average House Prices per Region + Mortgage/Base Rate overlay
 fig4 = make_subplots(specs=[[{"secondary_y": True}]])
@@ -401,6 +661,15 @@ html_template = f"""<!DOCTYPE html>
         .sources a {{ color: var(--accent-color); text-decoration: none; }}
         .sources a:hover {{ text-decoration: underline; }}
         .sources li {{ margin-bottom: 8px; }}
+        .notification-box {{
+            padding: 16px;
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--accent-color);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            color: var(--text-color);
+        }}
     </style>
 </head>
 <body>
@@ -458,21 +727,64 @@ html_template = f"""<!DOCTYPE html>
 
         <div class="section">
             <div class="text-box">
-                <h2>5. Spiral Heatmap: Average House Prices by Region</h2>
-                <p>This spiral visualisation plots regional average house prices over time. Each ring represents one year, spiralling outward from 2019 at the centre to the most recent data at the edge. Months are arranged clockwise from January at the top. Within each month, the 5 concentric segments represent individual regions. Colour intensity reflects the average house price: <span style="color: rgb(144,238,144); font-weight:600;">pastel green</span> for lower values transitioning to <span style="color: rgb(255,160,160); font-weight:600;">pastel red</span> for higher values. Hover over any segment to see the full breakdown.</p>
+                <h2>6. Regional Earnings vs House Prices: The Affordability Frontier</h2>
+                <p>By comparing average house prices against median annual earnings, we can calculate the <strong>Affordability Ratio</strong> (the number of full-salary years needed to buy a home). While the national average has drifted, the regional disparity is stark. In London, the ratio often exceeds 12-14x, whereas in the North East, it remains closer to 5-6x. This "Affordability Frontier" determines regional mobility; as the ratio climbs in the South, we see increased "priced-out" migration toward more affordable northern hubs, which in turn begins to inflate those local markets.</p>
+            </div>
+            <div class="table-wrapper">
+                {afford_table_html}
             </div>
             <div class="chart-container">
-                {html_chart5}
+                {html_chart6}
             </div>
         </div>
+
+        <div class="section">
+            <div class="text-box">
+                <h2>7. Disposable Income &amp; The "Real" Squeeze</h2>
+                <p>Gross Disposable Household Income (GDHI) represents the amount of money individuals have available for spending or saving after income distribution measures (e.g. taxes, social contributions). While nominal GDHI per head has grown since 2019, much of this gain has been offset by the inflationary shocks from the Ukraine and Middle East conflicts. High-energy costs and food inflation act as a "stealth tax" on disposable income, particularly in regions where earnings growth has lagged behind the national average.</p>
+            </div>
+            <div class="chart-container">
+                {html_chart7}
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="text-box">
+                <h2>8. The Deprivation Landscape &amp; Trends (2019-2025)</h2>
+                <p>The Index of Multiple Deprivation (IMD) provides a relative measure of deprivation across England. The interactive heatmap below illustrates the <strong>Proportion of LSOAs in the most deprived 10% nationally</strong> per district. You can toggle between the 2019 baseline and the newly released 2025 update using the buttons on the map.</p>
+                
+                <div class="notification-box">
+                    <strong>Important Information:</strong> These deprivation metrics are currently concentrated on **England**. While the map displays full UK boundaries for context, deprivation data for Scotland (SIMD), Wales (WIMD), and NI (NIMD) is pending future integration.
+                </div>
+            </div>
+
+            <div class="chart-container" style="margin-bottom: 24px;">
+                {html_chart8_map}
+            </div>
+
+            <div class="text-box">
+                <h3>IMD Deprivation Trends: 2019 vs 2025</h3>
+                <p>This table highlights the shift in deprivation concentration over the last six years. <span style="background-color:rgba(239, 68, 68, 0.1); padding:2px 4px; border-radius:4px;">Red-tinted rows</span> indicate areas where the concentration of deprivation has intensified (more LSOAs in the bottom 10%), while <span style="background-color:rgba(16, 185, 129, 0.1); padding:2px 4px; border-radius:4px;">green-tinted rows</span> indicate relative improvement.</p>
+                <div class="table-wrapper">
+                    {trend_table_html}
+                </div>
+            </div>
+
+            <div class="chart-container">
+                {html_chart8_bar}
+            </div>
+        </div>
+
 
         <div class="sources">
             <h3>Sources &amp; Citations</h3>
             <h4>Data Sources</h4>
             <ul>
                 <li><strong>Bank of England</strong> &mdash; Base Rate and Quoted Household MFI Rates: <a href="https://www.bankofengland.co.uk/boeapps/database/" target="_blank">bankofengland.co.uk</a></li>
+                <li><strong>Office for National Statistics (ONS)</strong> &mdash; Regional Earnings (EARN05) and GDHI: <a href="https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/datasets/grossweeklyearningsoffulltimeemployeesbyregionearn05" target="_blank">EARN05</a>, <a href="https://www.ons.gov.uk/economy/regionalaccounts/grossdisposablehouseholdincome" target="_blank">GDHI</a></li>
                 <li><strong>Office for National Statistics (ONS)</strong> &mdash; Consumer Price Inflation Time Series: <a href="https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23" target="_blank">ons.gov.uk</a></li>
                 <li><strong>HM Land Registry</strong> &mdash; UK House Price Index: <a href="https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads-november-2024" target="_blank">gov.uk</a></li>
+                <li><strong>Ministry of Housing, Communities &amp; Local Government</strong> &mdash; English Indices of Deprivation 2019 &amp; 2025: <a href="https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025" target="_blank">IMD 2025</a></li>
                 <li><strong>FRED (Federal Reserve)</strong> &mdash; 30-Year US Fixed Rate Mortgage Average: <a href="https://fred.stlouisfed.org/series/MORTGAGE30US" target="_blank">fred.stlouisfed.org</a></li>
             </ul>
             <h4>Context &amp; News Sources</h4>
@@ -522,3 +834,4 @@ with open('output/macro_analysis_dashboard.html', 'w', encoding='utf-8') as f:
     f.write(html_template)
     
 print("Dashboard regenerated successfully.")
+
