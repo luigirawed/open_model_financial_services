@@ -181,4 +181,7 @@ cython_debug/
 .cursorindexingignore
 
 
+# Data files (raw data, large geojson)
+data/
+
 output/
