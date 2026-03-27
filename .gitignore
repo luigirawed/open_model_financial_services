@@ -185,3 +185,4 @@ cython_debug/
 data/
 
 output/
+!output/sw.js

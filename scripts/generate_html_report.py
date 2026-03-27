@@ -965,6 +965,16 @@ html_template = f"""<!DOCTYPE html>
 
         <div class="section">
             <div class="text-box">
+                <h2>5. Spiral Heatmap: Regional House Prices Over Time</h2>
+                <p>This spiral heatmap visualizes the same regional price data in a cyclical format, making it easier to identify seasonal patterns and long-term trends across all five regions simultaneously. Each ring represents a year, and each segment within a ring represents a month. The color intensity shows the price level relative to each region's own history - green indicates lower prices, while red indicates higher prices. This view reveals how regional price cycles diverge even as they share common seasonal rhythms.</p>
+            </div>
+            <div class="chart-container">
+                {html_chart5}
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="text-box">
                 <h2>6. Regional Earnings vs House Prices: The Affordability Frontier</h2>
                 <p>By comparing average house prices against median annual earnings, we can calculate the <span class="term-hover" title="Affordability Ratio: House Price divided by Annual Earnings (higher = less affordable).">Affordability Ratio</span> (the number of full-salary years needed to buy a home). While the national average has drifted, the regional disparity is stark. In London, the ratio often exceeds 12-14x, whereas in the North East, it remains closer to 5-6x. This "Affordability Frontier" determines regional mobility; as the ratio climbs in the South, we see increased "priced-out" migration toward more affordable northern hubs, which in turn begins to inflate those local markets.</p>
             </div>
