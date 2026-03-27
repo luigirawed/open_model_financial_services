@@ -1203,7 +1203,7 @@ html_template = f"""<!DOCTYPE html>
 </html>
 """
 
-with open('dist/macro_analysis_dashboard.html', 'w', encoding='utf-8') as f:
+with open('dist/html/index.html', 'w', encoding='utf-8') as f:
     f.write(html_template)
     
 print("Dashboard regenerated successfully.")
