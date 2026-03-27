@@ -3,7 +3,7 @@ import json
 import pandas as pd
 
 OUTPUT_DIR = 'output'
-PREBUILT_DIR = 'prebuilt'
+PREBUILT_DIR = 'dist'
 
 REQUIRED_FILES = [
     'boe_base_rate.csv',

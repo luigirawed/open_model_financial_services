@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 import os
 
-PREBUILT_DIR = 'prebuilt'
+PREBUILT_DIR = 'dist'
 OUTPUT_DIR = 'output'
 
 def load_data_jsonl(csv_name, jsonl_name=None, numeric_cols=None, **csv_kwargs):
