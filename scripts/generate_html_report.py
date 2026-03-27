@@ -890,7 +890,8 @@ html_template = f"""<!DOCTYPE html>
             min-width: 0;
         }}
         .sidebar-nav {{
-            width: 140px;
+            width: 120px;
+            flex-shrink: 0;
             display: flex;
             flex-direction: column;
             gap: 12px;
@@ -900,6 +901,10 @@ html_template = f"""<!DOCTYPE html>
             border-radius: 12px;
             position: sticky;
             top: 20px;
+        }}
+        .chart-main-content .chart-container {{
+            width: 100%;
+            box-sizing: border-box;
         }}
         .nav-label {{
             font-size: 0.75rem;
@@ -929,6 +934,96 @@ html_template = f"""<!DOCTYPE html>
             color: var(--accent-color);
             border-color: rgba(59, 130, 246, 0.3);
             font-weight: 700;
+        }}
+
+        /* Year Selector - Inline (always visible in flow) */
+        .year-selector-container {{
+            margin-bottom: 24px;
+        }}
+        .year-selector-inline {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }}
+        
+        /* Year Selector - Overlay (animated in/out) */
+        .year-selector-overlay {{
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            padding: 12px 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            animation: fadeIn 0.25s ease-out;
+            align-items: center;
+        }}
+        .year-selector-overlay.visible {{
+            display: inline-flex;
+        }}
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateX(-50%) translateY(-8px); }}
+            to {{ opacity: 1; transform: translateX(-50%) translateY(0); }}
+        }}
+        
+        .year-selector-label {{
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            font-weight: 700;
+            margin-right: 4px;
+        }}
+        .year-selector-link {{
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }}
+        .year-selector-link:hover {{
+            background: rgba(59, 130, 246, 0.05);
+            color: var(--accent-color);
+        }}
+        .year-selector-link.active {{
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent-color);
+            border-color: rgba(59, 130, 246, 0.3);
+            font-weight: 700;
+        }}
+
+        @media (max-width: 900px) {{
+            .chart-layout-with-sidebar {{
+                flex-direction: column;
+            }}
+            .sidebar-nav {{
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+                position: static;
+            }}
+            .nav-label {{
+                width: 100%;
+            }}
+            .year-selector-overlay {{
+                left: 10px;
+                right: 10px;
+                transform: none;
+                width: auto;
+            }}
         }}
     </style>
 </head>
@@ -1033,22 +1128,26 @@ html_template = f"""<!DOCTYPE html>
                 </div>
             </div>
 
-            <div class="chart-layout-with-sidebar">
-                <div class="chart-main-content">
-                    <div class="chart-container" style="margin-bottom: 24px;">
-                        {html_chart8_map}
-                    </div>
-
-                    <div class="chart-container" style="margin-bottom: 24px;">
-                        {html_chart8_bar}
-                    </div>
+            <div class="year-selector-container">
+                <div class="year-selector-inline" id="yearSelectorInline">
+                    <span class="year-selector-label">Select Year</span>
+                    <a class="year-selector-link active" onclick="switchYear('2025', 'inline')" id="link-2025-inline">2025 Snapshot</a>
+                    <a class="year-selector-link" onclick="switchYear('2019', 'inline')" id="link-2019-inline">2019 Baseline</a>
                 </div>
+            </div>
 
-                <div class="sidebar-nav">
-                    <div class="nav-label">Select Year</div>
-                    <a class="sidebar-link active" onclick="switchYear('2025')" id="link-2025">2025 Snapshot</a>
-                    <a class="sidebar-link" onclick="switchYear('2019')" id="link-2019">2019 Baseline</a>
-                </div>
+            <div class="year-selector-overlay" id="yearSelectorOverlay">
+                <span class="year-selector-label">Select Year</span>
+                <a class="year-selector-link active" onclick="switchYear('2025', 'overlay')" id="link-2025-overlay">2025 Snapshot</a>
+                <a class="year-selector-link" onclick="switchYear('2019', 'overlay')" id="link-2019-overlay">2019 Baseline</a>
+            </div>
+
+            <div class="chart-container" style="margin-bottom: 24px;">
+                {html_chart8_map}
+            </div>
+
+            <div class="chart-container" style="margin-bottom: 24px;">
+                {html_chart8_bar}
             </div>
 
             <div class="text-box">
@@ -1178,8 +1277,8 @@ html_template = f"""<!DOCTYPE html>
             }}
         }});
 
-        // Year Switching Logic for Section 8
-        function switchYear(year) {{
+        // Year Switching Logic for Section 8 - handles both inline and overlay
+        function switchYear(year, source) {{
             const is2025 = year === '2025';
             const mapDiv = document.getElementById('chart8_map');
             const barDiv = document.getElementById('chart8_bar');
@@ -1194,10 +1293,51 @@ html_template = f"""<!DOCTYPE html>
                 title: is2025 ? "Top 15 Most Deprived Districts (IMD 2025)" : "Top 15 Most Deprived Districts (IMD 2019)"
             }});
 
-            // Update Sidebar Links
-            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
-            document.getElementById('link-' + year).classList.add('active');
+            // Update ALL selector links (both inline and overlay)
+            document.querySelectorAll('.year-selector-link').forEach(link => link.classList.remove('active'));
+            
+            // Update both inline and overlay versions
+            const inlineLink = document.getElementById('link-' + year + '-inline');
+            const overlayLink = document.getElementById('link-' + year + '-overlay');
+            if (inlineLink) inlineLink.classList.add('active');
+            if (overlayLink) overlayLink.classList.add('active');
         }}
+
+        // Overlay Year Selector Scroll Behavior
+        document.addEventListener('DOMContentLoaded', function() {{
+            const overlay = document.getElementById('yearSelectorOverlay');
+            if (!overlay) return;
+
+            const container = document.querySelector('.year-selector-container');
+            const barChart = document.getElementById('chart8_bar');
+            
+            let isVisible = false;
+
+            const checkOverlay = function() {{
+                if (!container || !barChart) return;
+                
+                const containerRect = container.getBoundingClientRect();
+                const barRect = barChart.getBoundingClientRect();
+                const triggerPoint = 100;
+
+                // Show overlay when container top passes trigger point but bar chart still visible
+                const shouldShow = containerRect.top <= triggerPoint && barRect.bottom > 60;
+                
+                if (shouldShow && !isVisible) {{
+                    isVisible = true;
+                    overlay.classList.add('visible');
+                }}
+                else if (isVisible && (barRect.bottom <= 60 || containerRect.top > triggerPoint + 20)) {{
+                    isVisible = false;
+                    overlay.classList.remove('visible');
+                }}
+            }};
+
+            window.addEventListener('scroll', checkOverlay, {{ passive: true }});
+            window.addEventListener('resize', checkOverlay, {{ passive: true }});
+            
+            setTimeout(checkOverlay, 100);
+        }});
     </script>
 </body>
 </html>
