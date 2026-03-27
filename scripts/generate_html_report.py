@@ -1172,24 +1172,48 @@ html_template = f"""<!DOCTYPE html>
             </div>
         </details>
 
-        <details id="news">
-            <summary>News &amp; Contextual Sources</summary>
+        <!-- ========================================================================
+             DATA SOURCES & CITATIONS
+             IMPORTANT: When adding new data sources to the pipeline, update this section!
+             ======================================================================== -->
+        <details id="sources">
+            <summary>Data Sources &amp; Citations</summary>
             <div class="details-content">
+                <p style="margin-bottom:12px;font-size:0.9em;color:#64748b;">
+                    All chart data is sourced from official government and regulatory APIs.
+                    Narrative context references general economic news sources (Reuters, FT).
+                </p>
                 <ul>
-                    <li><strong>[5] Reuters / S&amp;P Global</strong> — PMI Indices and Global Supply Chain sentiment: <a href="https://www.reuters.com" target="_blank">Reuters.com</a></li>
-                    <li><strong>[6] Goldman Sachs / Financial Times</strong> — Energy Market Analysis and Regional Geopolitics: <a href="https://www.ft.com" target="_blank">FT.com</a></li>
+                    <li><strong>[1] Bank of England</strong> — Base Rate, Quoted Mortgage Rates (2Y/5Y fixed), Gilt Yields<br>
+                        <a href="https://www.bankofengland.co.uk/boeapps/database/" target="_blank">boeapps database</a> | 
+                        <a href="https://www.bankofengland.co.uk/monetary-policy-report" target="_blank">Monetary Policy Report</a></li>
+                    <li><strong>[2] Office for National Statistics (ONS)</strong> — CPI Inflation, Regional Earnings (EARN05), GDHI, ASHE Occupation Data<br>
+                        <a href="https://www.ons.gov.uk/" target="_blank">ons.gov.uk</a></li>
+                    <li><strong>[3] Ministry of Housing, Communities & Local Government (MHCLG)</strong> — English Indices of Multiple Deprivation (2019 & 2025)<br>
+                        <a href="https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025" target="_blank">IMD 2025</a> |
+                        <a href="https://www.gov.uk/government/statistics/english-indices-of-deprivation-2019" target="_blank">IMD 2019</a></li>
+                    <li><strong>[4] HM Land Registry</strong> — UK House Price Index (England & Wales)<br>
+                        <a href="https://www.gov.uk/government/organisations/land-registry" target="_blank">Land Registry</a> |
+                        <a href="https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/" target="_blank">HPI Data Download</a></li>
+                    <li><strong>[5] Financial Conduct Authority (FCA)</strong> — Mortgage Lending Statistics (MLAR)<br>
+                        <a href="https://www.fca.org.uk/publication/data/mlar-statistics-summary" target="_blank">MLAR Summary</a></li>
+                    <li><strong>[6] UK Open Banking</strong> — Personal Current Account Product Data (CMA9)<br>
+                        <a href="https://www.openbanking.org.uk/" target="_blank">openbanking.org.uk</a></li>
                 </ul>
             </div>
         </details>
 
-        <details id="sources">
-            <summary>Data Sources &amp; Citations</summary>
+        <details id="news">
+            <summary>News &amp; Contextual Sources</summary>
             <div class="details-content">
+                <p style="margin-bottom:12px;font-size:0.9em;color:#64748b;">
+                    General economic news sources referenced in narrative commentary only (NOT for data).
+                </p>
                 <ul>
-                    <li><strong>[1] Bank of England</strong> (s1) — <a href="https://www.bankofengland.co.uk" target="_blank">bankofengland.co.uk</a></li>
-                    <li><strong>[2] ONS</strong> (s2) — <a href="https://www.ons.gov.uk" target="_blank">ons.gov.uk</a></li>
-                    <li><strong>[3] MHCLG</strong> (s3) — <a href="https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025" target="_blank">IMD Report</a></li>
-                    <li><strong>[4] Land Registry</strong> (s4) — <a href="https://www.gov.uk/government/organisations/land-registry" target="_blank">gov.uk</a></li>
+                    <li><strong>Reuters / S&amp;P Global</strong> — PMI Indices and Global Supply Chain sentiment<br>
+                        <a href="https://www.reuters.com" target="_blank">reuters.com</a></li>
+                    <li><strong>Financial Times</strong> — Energy Market Analysis and Economic Forecasts<br>
+                        <a href="https://www.ft.com" target="_blank">ft.com</a></li>
                 </ul>
             </div>
         </details>
