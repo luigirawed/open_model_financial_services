@@ -186,3 +186,7 @@ data/
 
 output/
 !output/sw.js
+!output/macro_analysis_dashboard.html
+
+# Pre-built data for deployment (tracked in git)
+!**/prebuilt/

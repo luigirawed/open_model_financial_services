@@ -2,30 +2,57 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
+import json
+import os
+
+PREBUILT_DIR = 'prebuilt'
+OUTPUT_DIR = 'output'
+
+def load_data_jsonl(csv_name, jsonl_name=None, numeric_cols=None, **csv_kwargs):
+    if jsonl_name is None:
+        jsonl_name = csv_name.replace('.csv', '.jsonl')
+    jsonl_path = os.path.join(PREBUILT_DIR, jsonl_name)
+    csv_path = os.path.join(OUTPUT_DIR, csv_name)
+    
+    if os.path.exists(jsonl_path):
+        records = []
+        with open(jsonl_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                records.append(json.loads(line))
+        df = pd.DataFrame(records)
+        if numeric_cols:
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+        return df
+    elif os.path.exists(csv_path):
+        return pd.read_csv(csv_path, **csv_kwargs)
+    else:
+        raise FileNotFoundError(f"Data file not found: {csv_path} or {jsonl_path}")
 
 # 1. Load Data
-df_boe = pd.read_csv('output/boe_base_rate.csv')
+df_boe = load_data_jsonl('boe_base_rate.csv')
 df_boe['Date'] = pd.to_datetime(df_boe['DATE'])
 df_boe = df_boe.set_index('Date').resample('ME').last()
 
-df_inf = pd.read_csv('output/ons_cpi_inflation.csv', skiprows=8, names=['Date', 'CPI_Rate'])
+df_inf = load_data_jsonl('ons_cpi_inflation.csv', numeric_cols=['CPI_Rate'])
 df_inf['Date'] = pd.to_datetime(df_inf['Date'], errors='coerce')
 df_inf = df_inf.dropna(subset=['Date'])
 df_inf = df_inf.set_index('Date').resample('ME').last()
 
-df_mort2 = pd.read_csv('output/boe_IUMTLMV.csv')
+df_mort2 = load_data_jsonl('boe_IUMTLMV.csv')
 df_mort2['Date'] = pd.to_datetime(df_mort2['DATE'])
 df_mort2 = df_mort2.set_index('Date').resample('ME').last()
 
-df_hpi = pd.read_csv('output/uk_hpi_data.csv', low_memory=False)
+df_hpi = load_data_jsonl('uk_hpi_data.csv', low_memory=False)
 df_hpi['Date'] = pd.to_datetime(df_hpi['Date'], format='%d/%m/%Y')
 df_hpi_agg = df_hpi.groupby('Date')[['AveragePrice', '12m%Change']].mean().resample('ME').last()
 
 # New Socioeconomic Data
-df_earn = pd.read_csv('output/ons_earn05_regional_earnings.csv')
-df_gdhi = pd.read_csv('output/ons_gdhi_regional.csv')
-df_imd = pd.read_csv('output/imd_2019_regional.csv')
-df_ashe = pd.read_csv('output/ons_ashe_occupation_raw.csv')
+df_earn = load_data_jsonl('ons_earn05_regional_earnings.csv')
+df_gdhi = load_data_jsonl('ons_gdhi_regional.csv')
+df_imd = load_data_jsonl('imd_2019_regional.csv')
+df_ashe = load_data_jsonl('ons_ashe_occupation_raw.csv')
 
 # Master DF (2019+)
 df = pd.concat([
@@ -163,8 +190,8 @@ html_chart7 = fig7.to_html(full_html=False, include_plotlyjs=False)
 
 # Chart 8: IMD Deprivation Heatmap & Bar (Trend Support)
 # Load IMD 2019 and 2025
-df_imd_2019 = pd.read_csv('output/imd_2019_regional.csv')
-df_imd_2025 = pd.read_csv('output/imd_2025_regional.csv')
+df_imd_2019 = load_data_jsonl('imd_2019_regional.csv')
+df_imd_2025 = load_data_jsonl('imd_2025_regional.csv')
 
 # Pre-process columns
 df_imd_2019.columns = [c.strip() for c in df_imd_2019.columns]
@@ -216,7 +243,7 @@ fig8_bar.update_layout(
 html_chart8_bar = fig8_bar.to_html(full_html=False, include_plotlyjs=False, div_id="chart8_bar")
 
 # Chart 8b: Toggleable Density Heatmap
-df_centroids = pd.read_csv('output/uk_lad_centroids.csv')
+df_centroids = load_data_jsonl('uk_lad_centroids.csv')
 code_2019_col = [c for c in df_imd_2019.columns if 'code' in c.lower()][0]
 df_map_2025 = pd.merge(df_imd_2025, df_centroids, left_on=code_2025_col, right_on='code', how='inner')
 df_map_2019 = pd.merge(df_imd_2019, df_centroids, left_on=code_2019_col, right_on='code', how='inner')
@@ -525,7 +552,7 @@ html_chart5 = fig5.to_html(full_html=False, include_plotlyjs=False)
 # --------------------------------------------------------------------------------------------------------------------
 # 4. PREPARE HERO SECTION & STAT HIGHLIGHTS (2019 vs 2026)
 # --------------------------------------------------------------------------------------------------------------------
-df_gilt_raw = pd.read_csv('output/boe_gilt_yields_raw.csv')
+df_gilt_raw = load_data_jsonl('boe_gilt_yields_raw.csv')
 df_gilt_raw['observation_date'] = pd.to_datetime(df_gilt_raw.iloc[:,0])
 df_gilt_raw = df_gilt_raw.sort_values('observation_date')
 
